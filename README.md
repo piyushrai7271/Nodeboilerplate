@@ -110,3 +110,22 @@ When complete, NodeBoilerplate will offer:
 
 ## 📂 Project Structure
 
+
+src/
+├── config/ # Config files
+├── controllers/ # Route controllers
+├── middlewares/ # Express middlewares
+├── models/ # Database models
+├── routes/ # API routes
+├── services/ # Business logic
+├── utils/ # Helper utilities
+└── app.js # Entry point
+
+
+
+
+---
+
+## 📜 License
+This project is licensed under the **MIT License**.
+
