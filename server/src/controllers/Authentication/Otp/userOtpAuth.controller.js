@@ -1,5 +1,104 @@
 const User = require("../../../models/Authentication/user.model");
 const mongoose = require("mongoose");
+const sendOtpMail = require("../../../utilles/sendEmail");
+
+// const register = async (req, res) => {
+//   try {
+//     const {
+//       userName,
+//       mobileNumber,
+//       fullname,
+//       dob,
+//       address,
+//       email,
+//       profileImage,
+//       gender,
+//     } = req.body;
+
+//     // Validate required fields only
+//     if (!userName || !mobileNumber || !email) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Username and phone number or email are required",
+//       });
+//     }
+
+//     // Validate mobile number format
+//     const isValidmobileNumber = /^[6-9]\d{9}$/.test(mobileNumber);
+//     if (!isValidmobileNumber) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid phone number format.",
+//       });
+//     }
+
+//     // Check if a verified user already exists with this mobile number
+//     const existingUser = await User.exists({ mobileNumber, isVerified: true });
+//     if (existingUser) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User already exists with this mobile number",
+//       });
+//     }
+
+//     // Generate OTP
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+//     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+//     // If a not-verified user exists, update that user's OTP and other fields
+//     const notVerifiedUser = await User.findOne({
+//       mobileNumber,
+//       isVerified: false,
+//     });
+
+//     if (notVerifiedUser) {
+//       await User.findOneAndUpdate(
+//         { mobileNumber },
+//         {
+//           otp,
+//           otpExpiresAt,
+//           userName,
+//           fullname,
+//           dob,
+//           address,
+//           email,
+//           profileImage,
+//           gender,
+//         }
+//       );
+//     } else {
+//       // Create new user with required and optional fields
+//       const newUser = new User({
+//         userName,
+//         mobileNumber,
+//         otp,
+//         otpExpiresAt,
+//         // Only add optional fields if present
+//         ...(fullname && { fullname }),
+//         ...(dob && { dob }),
+//         ...(address && { address }),
+//         ...(email && { email }),
+//         ...(profileImage && { profileImage }),
+//         ...(gender && { gender }),
+//       });
+//       await newUser.save();
+//     }
+
+//     // Return response (do not send OTP in production!)
+//     return res.status(201).json({
+//       success: true,
+//       message: "Otp sent successfully.",
+//       isForRegistration: true,
+//       data: { otp, mobileNumber, }
+//     });
+//   } catch (error) {
+//     console.error("Error during registration:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//     });
+//   }
+// };
 
 const register = async (req, res) => {
   try {
@@ -14,11 +113,11 @@ const register = async (req, res) => {
       gender,
     } = req.body;
 
-    // Validate required fields only
-    if (!userName || !mobileNumber) {
+    // Validate required fields
+    if (!userName || !mobileNumber || !email) {
       return res.status(400).json({
         success: false,
-        message: "Username and phone number are required",
+        message: "Username, phone number, and email are required",
       });
     }
 
@@ -31,12 +130,24 @@ const register = async (req, res) => {
       });
     }
 
-    // Check if a verified user already exists with this mobile number
-    const existingUser = await User.exists({ mobileNumber, isVerified: true });
-    if (existingUser) {
+    // Check for existing user with mobile number, email, or userName (and not soft deleted)
+    const duplicateUser = await User.findOne({
+      $or: [
+        { mobileNumber },
+        { email },
+        { userName }
+      ],
+      isDeleted: false
+    });
+
+    if (duplicateUser) {
+      let duplicateField = '';
+      if (duplicateUser.mobileNumber === mobileNumber) duplicateField = 'mobile number';
+      else if (duplicateUser.email === email) duplicateField = 'email';
+      else duplicateField = 'username';
       return res.status(400).json({
         success: false,
-        message: "User already exists with this mobile number",
+        message: `User already exists with this ${duplicateField}`,
       });
     }
 
@@ -44,15 +155,21 @@ const register = async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
-    // If a not-verified user exists, update that user's OTP and other fields
+    // If a not-verified user exists (with same mobile/email/username but marked as deleted), revive and update
     const notVerifiedUser = await User.findOne({
-      mobileNumber,
+      $or: [
+        { mobileNumber },
+        { email },
+        { userName }
+      ],
       isVerified: false,
+      isDeleted: true
     });
 
+    let userId;
     if (notVerifiedUser) {
-      await User.findOneAndUpdate(
-        { mobileNumber },
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: notVerifiedUser._id },
         {
           otp,
           otpExpiresAt,
@@ -63,33 +180,49 @@ const register = async (req, res) => {
           email,
           profileImage,
           gender,
-        }
+          isDeleted: false,
+          deletedAt: null,
+        },
+        { new: true }
       );
+      userId = updatedUser._id;
     } else {
-      // Create new user with required and optional fields
+      // Create new user with provided fields
       const newUser = new User({
         userName,
         mobileNumber,
+        email,
         otp,
         otpExpiresAt,
-        // Only add optional fields if present
         ...(fullname && { fullname }),
         ...(dob && { dob }),
         ...(address && { address }),
-        ...(email && { email }),
         ...(profileImage && { profileImage }),
         ...(gender && { gender }),
       });
       await newUser.save();
+      userId = newUser._id;
     }
 
-    // Return response (do not send OTP in production!)
+    // Send OTP email
+    try {
+      await sendOtpMail(email, otp);
+    }catch (emailError) {
+      console.error("Error sending OTP email:", emailError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP email.",
+        error: emailError.message, // for debugging - remove in production
+  });
+}
+
+    // Return response (do NOT send OTP in production)
     return res.status(201).json({
       success: true,
-      message: "Otp sent successfully.",
-      isForRegistration: true,
-      data: { otp, mobileNumber, }
+      message: "OTP sent successfully.",
+      data: { mobileNumber, userId, otp }
     });
+
   } catch (error) {
     console.error("Error during registration:", error);
     return res.status(500).json({
