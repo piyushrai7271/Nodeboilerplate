@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
-import userTokenRoutes from './src/routes/Authentication/Token/userToken.routes.js';
-import userOtpRoutes from './src/routes/Authentication/Otp/userOtp.routes.js';
+import userTokenRoutes from './src/routes/Authentication/Token/tokenAuth.routes.js';
+import userOtpRoutes from './src/routes/Authentication/Otp/otpAuth.routes.js';
 
 const app = express();
 
