@@ -1,10 +1,10 @@
 {
   "name": "node-boilerplate",
   "version": "1.0.0",
-  "description": "it is personal project for NodeBoilerplate",
+  "description": "it is NodeBoilerplate project to get done basic thing quickly",
   "license": "ISC",
   "author": "piyush rai",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
