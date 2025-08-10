@@ -1,55 +1,65 @@
-// /config/cloudinary.js
-const multer = require("multer");
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const cloudinary = require("cloudinary").v2;
-const path = require("path");
+import dotenv from "dotenv";
+dotenv.config();
 
-// Configure Cloudinary with env variables
+import multer from "multer";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import { v2 as cloudinary } from "cloudinary";
+import path from "path";
+
+// 🔐 Configure Cloudinary
 cloudinary.config({
-  cloud_name:'piyushrai',
-  api_key:632337845436632,
-  api_secret:'kW1Q9qd4JP_uoygO-Rb9t7H54tI',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log(`cloudinary Api key : ${process.env.CLOUD_API_KEY}`);
+// ✅ Allowed formats
+const allowedFormats = [
+  "png", "jpg", "jpeg", "webp", "svg", "avif", // images
+  "pdf", "doc", "docx", "xls", "xlsx",        // documents
+];
 
-// Allowed file extensions by type
-const imageFormats = ["png", "jpg", "jpeg", "webp"];
-const videoFormats = ["mp4", "mov", "avi", "mkv"];
-const documentFormats = ["pdf", "doc", "docx", "xls", "xlsx"];
-
-// Multer Storage with Cloudinary
+// 🌥️ Multer Cloudinary Storage
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
-    const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
-
-    // Validate file extension
-    if (![...imageFormats, ...videoFormats, ...documentFormats].includes(ext)) {
-      throw new Error(
-        `Invalid file type. Allowed formats: ${[...imageFormats, ...videoFormats, ...documentFormats].join(", ")}.`
-      );
+    const ext = path.extname(file.originalname).toLowerCase().slice(1);
+    if (!allowedFormats.includes(ext)) {
+      throw new Error("❌ Invalid file type.");
     }
-
-    // Determine resource type dynamically
-    const resource_type = imageFormats.includes(ext)
+    const resource_type = ["png", "jpg", "jpeg", "webp", "svg", "avif"].includes(ext)
       ? "image"
-      : videoFormats.includes(ext)
-      ? "video"
       : "raw";
-
     return {
-      folder: "NODEBOILERPLATE", // <-- Change this for your project
+      folder: "CTRD",
       resource_type,
-      type: "upload", // public upload
+      type: "upload",
       public_id: `${Date.now()}-${file.originalname}`,
     };
   },
 });
 
-const upload = multer({ storage });
+// 📦 Multer middleware
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().slice(1);
+    if (!allowedFormats.includes(ext)) {
+      return cb(new Error("❌ Unsupported file type."), false);
+    }
+    cb(null, true);
+  },
+});
 
-module.exports = {
-  upload,
-  cloudinary,
+// 🌐 Public Cloudinary URL generator
+const getPublicCloudinaryUrl = (public_id, resource_type = "raw") => {
+  return cloudinary.url(`NODEBOILERPLATE/${public_id}`, {
+    resource_type,
+    type: "upload",
+    secure: true,
+    flags: "attachment:false",
+  });
 };
+
+export { upload, cloudinary, getPublicCloudinaryUrl };

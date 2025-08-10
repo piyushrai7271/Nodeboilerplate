@@ -28,6 +28,38 @@ const userTokenSchema = new mongoose.Schema(
       type: String,
       required: [true, "password is required"],
     },
+    profileImage: {
+      //cloudinary image save
+      type: String,
+      default: "",
+    },
+    address: {
+      type: String,
+      default: "",
+    },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Others"],
+    },
+    fathersName: {
+      type: String,
+    },
+    mothersName: {
+      type: String,
+    },
+    dob: {
+      type: String,
+    },
+    heighestQualification: {
+      type: String,
+      enum: [
+        "Heigh School",
+        "Intermediat",
+        "Graduation",
+        "Post-graduation",
+        "Phd",
+      ],
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -40,23 +72,22 @@ const userTokenSchema = new mongoose.Schema(
       type: Boolean, // email verification
       default: false,
     },
-    otp:{
-        type:String
+    otp: {
+      type: String,
     },
-    otpExpiresAt:{
-        type:Date
-    }
+    otpExpiresAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
-
 
 // 🔒 Hash password and otp before saving
 userTokenSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }
-   // hashing otp
+  // hashing otp
   if (this.isModified("otp") && this.otp && !this.otp.startsWith("$2b$")) {
     this.otp = await bcrypt.hash(this.otp.toString(), 10);
   }
@@ -89,21 +120,16 @@ userTokenSchema.methods.generateAccessToken = function () {
 
 // 🔄 Generate Refresh Token
 userTokenSchema.methods.generateRefreshToken = function () {
-  return jwt.sign(
-    { _id: this._id },
-    process.env.REFRESH_TOKEN_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
-  );
+  return jwt.sign({ _id: this._id }, process.env.REFRESH_TOKEN_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+  });
 };
 // 🔑 generating token for otp
 userTokenSchema.methods.generateOtpToken = function () {
-  return jwt.sign(
-    { _id: this._id },
-    process.env.OTP_TOKEN_SECRET,
-    { expiresIn:process.env.OTP_TOKEN_EXPIRY }
-  );
+  return jwt.sign({ _id: this._id }, process.env.OTP_TOKEN_SECRET, {
+    expiresIn: process.env.OTP_TOKEN_EXPIRY,
+  });
 };
-
 
 const UserToken = mongoose.model("UserToken", userTokenSchema);
 export default UserToken;
