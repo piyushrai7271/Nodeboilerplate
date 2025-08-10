@@ -1,7 +1,11 @@
 import jwt from "jsonwebtoken";
 import UserToken from "../../models/Authentication/Token/tokeAuth.model.js";
 
-// Get token from  authorization header or cookie
+// ===============================
+// Helper Functions
+// ===============================
+
+// Get token from authorization header or cookie
 const getTokenFromRequest = (req) => {
   const authHeader = req.headers.authorization || req.headers.Authorization;
   const tokenFromHeader = authHeader?.startsWith("Bearer ")
@@ -22,6 +26,9 @@ const decodeToken = (token, secret) => {
   }
 };
 
+// ===============================
+// Middleware 1: Validate Access Token
+// ===============================
 const userValidateToken = async (req, res, next) => {
   try {
     const token = getTokenFromRequest(req);
@@ -58,7 +65,9 @@ const userValidateToken = async (req, res, next) => {
   }
 };
 
-// ✅ Middleware 2: Used ONLY for OTP verification — uses otpToken
+// ===============================
+// Middleware 2: Validate OTP Token
+// ===============================
 const userValidateOtpToken = async (req, res, next) => {
   try {
     const token = getTokenFromRequest(req);
@@ -87,4 +96,4 @@ const userValidateOtpToken = async (req, res, next) => {
   }
 };
 
-export {userValidateOtpToken,userValidateToken};
+export { userValidateToken, userValidateOtpToken };

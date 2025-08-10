@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
 import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
-import {cloudinary} from "../../../config/cloudinary.js";
+import { cloudinary } from "../../../config/cloudinary.js";
+import {sendOtpVerifyEmail} from "../../../utilles/Token/token.verifyEmail.js";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -18,62 +18,64 @@ const register = async (req, res) => {
   try {
     const { fullName, email, mobileNumber, password } = req.body;
 
-    //validating input
+    // 1️⃣ Validate required fields
     if (!fullName || !email || !mobileNumber || !password) {
       return res.status(400).json({
         success: false,
-        message: "For registering user all feilds are required",
+        message: "Full name, email, mobile number, and password are required",
       });
     }
-    //validate email formate
+
+    // 2️⃣ Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({
+      return res.status(422).json({
         success: false,
         message: "Invalid email format",
       });
     }
 
-    //validate mobileNumber formate
+    // 3️⃣ Validate mobile number format
     const phoneRegex = /^\d{10}$/;
-    if (!phoneRegex.test(phone)) {
-      return res.status(400).json({
+    if (!phoneRegex.test(mobileNumber)) {
+      return res.status(422).json({
         success: false,
-        message: "Phone number must be 10 digits",
+        message: "Mobile number must be exactly 10 digits",
       });
     }
 
-    //check for strong password
+    // 4️⃣ Validate password strength
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(password)) {
-      return res.status(400).json({
+      return res.status(422).json({
         success: false,
         message:
-          "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character",
+          "Password must be at least 8 chars long, include uppercase, lowercase, number, and special character",
       });
     }
 
-    //check for unique email
-    const emailExist = await UserToken.find({ email });
-    if (emailExist) {
-      return res.status(401).json({
-        success: false,
-        message: "User already exist with this email",
-      });
-    }
-    //create user for register
-    const user = new UserToken({
-      fullName,
-      email,
-      mobileNumber,
-      password,
+    // 5️⃣ Check for existing email and mobileNumber
+    const existingUser = await UserToken.findOne({
+      isDeleted: false,
+      $or: [{ email }, { mobileNumber }],
     });
 
-    // save user for register
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message:
+          existingUser.email === email
+            ? "User already exists with this email"
+            : "User already exists with this mobile number",
+      });
+    }
+
+    // 6️⃣ Create and save user
+    const user = new UserToken({ fullName, email, mobileNumber, password });
     await user.save();
 
-    // send otp on provided email
+    // 7️⃣ Send OTP email
     const otpResult = await sendOtpVerifyEmail(user);
     if (!otpResult.success) {
       return res.status(500).json({
@@ -82,19 +84,19 @@ const register = async (req, res) => {
       });
     }
 
-    //Generate short liver OTP
+    // 8️⃣ Generate OTP token
     const otpToken = user.generateOtpToken();
     if (!otpToken) {
-      return res.status(400).json({
+      return res.status(500).json({
         success: false,
-        message: "Otp token doesn't recive",
+        message: "Failed to generate OTP token",
       });
     }
 
-    //return successfull message
+    // 9️⃣ Success response
     return res.status(201).json({
       success: true,
-      message: "User registered successfully !!",
+      message: "User registered successfully. OTP sent to email.",
       user: {
         id: user._id,
         fullName: user.fullName,
@@ -105,7 +107,7 @@ const register = async (req, res) => {
       otpToken,
     });
   } catch (error) {
-    console.error("Error in register :", error);
+    console.error("Error in register:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -180,39 +182,42 @@ const resendOtp = async (req, res) => {
   try {
     const user = req.user;
 
+    // 1️⃣ Ensure user is present in request (comes from middleware)
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: User not found",
+        message: "Unauthorized: User not found in request",
       });
     }
 
+    // 2️⃣ Prevent resending if already verified
     if (user.isVerified) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: "Email already verified. No need to resend OTP.",
+        message: "Email is already verified. No need to resend OTP.",
       });
     }
 
-    const response = await sendOtpVerifyEmail(user);
+    // 3️⃣ Send OTP
+    const otpResponse = await sendOtpVerifyEmail(user);
 
-    if (response.success) {
-      return res.status(200).json({
-        success: true,
-        message: "OTP resent successfully !!",
-      });
-    } else {
-      return res.status(500).json({
+    if (!otpResponse.success) {
+      return res.status(502).json({ // 502 since it's a failure from an external service (email sending)
         success: false,
-        message: "Failed to resend OTP please try again",
+        message: "Failed to resend OTP. Please try again later.",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP resent successfully",
+    });
+
   } catch (error) {
     console.error("Resend OTP error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message,
+      message: "Internal Server Error",
     });
   }
 };
@@ -220,72 +225,79 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    //validate required fields
+    // 1️⃣ Validate input
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email and Password are required for login.",
+        message: "Email and password are required.",
       });
     }
-    //find user with email
+
+    // 2️⃣ Find user
     const user = await UserToken.findOne({ email });
     if (!user) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        message: "Email or Password is incorrect. please register first.",
+        message: "Invalid email or password.",
       });
     }
-    //check if user is verified
+
+    // 3️⃣ Check verification status
     if (!user.isVerified) {
       return res.status(403).json({
         success: false,
-        message: "Your email is not verified. please verify before logging In.",
+        message: "Email not verified. Please verify before logging in.",
       });
     }
-    //compare password with hased
+
+    // 4️⃣ Compare password
     const isPasswordCorrect = await user.isPasswordCorrect(password);
     if (!isPasswordCorrect) {
       return res.status(401).json({
         success: false,
-        message: "Password is incorrect.",
+        message: "Invalid email or password.",
       });
     }
-    //generate access and refresh Token
-    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-      user._id
-    );
-    // Store refreshToken in DB
+
+    // 5️⃣ Generate tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+    // 6️⃣ Store refresh token in DB
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
-    //Sanitize user object
-    const loggedInUser = await UserToken.findById(user._id).select(
-      "-password -refreshToken -otp -otpExpiresAt"
-    );
 
-    // set cookies
-    const options = {
+    // 7️⃣ Remove sensitive data
+    const sanitizedUser = user.toObject();
+    delete sanitizedUser.password;
+    delete sanitizedUser.refreshToken;
+    delete sanitizedUser.otp;
+    delete sanitizedUser.otpExpiresAt;
+
+    // 8️⃣ Set cookie options
+    const cookieOptions = {
       httpOnly: true,
       secure: true,
       sameSite: "None",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     };
 
-    //send response
+    // 9️⃣ Send success response
     return res
       .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", refreshToken, options)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
       .json({
         success: true,
-        message: "User logged in successfully !!",
+        message: "Logged in successfully.",
         accessToken,
-        user: loggedInUser,
+        user: sanitizedUser,
       });
+
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "Internal server error.",
       error: error.message,
     });
   }
@@ -503,7 +515,8 @@ const updateUserDetails = async (req, res) => {
     if (fathersName) user.fathersName = fathersName;
     if (mothersName) user.mothersName = mothersName;
     if (dob) user.dob = dob;
-    if (heighestQualification) user.heighestQualification = heighestQualification;
+    if (heighestQualification)
+      user.heighestQualification = heighestQualification;
 
     await user.save();
 
@@ -512,7 +525,6 @@ const updateUserDetails = async (req, res) => {
       message: "User details updated successfully",
       data: user,
     });
-
   } catch (error) {
     console.error("Error while updating user data:", error);
     return res.status(500).json({
@@ -682,10 +694,15 @@ const hardDeleteUser = async (req, res) => {
         const publicIdMatch = user.profileImage.match(/\/([^/]+)\.[a-zA-Z]+$/);
         if (publicIdMatch && publicIdMatch[1]) {
           const publicId = `CTRD/${publicIdMatch[1]}`;
-          await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+          await cloudinary.uploader.destroy(publicId, {
+            resource_type: "image",
+          });
         }
       } catch (err) {
-        console.error("⚠️ Failed to delete image from Cloudinary:", err.message);
+        console.error(
+          "⚠️ Failed to delete image from Cloudinary:",
+          err.message
+        );
         // We log the error but still continue with DB deletion
       }
     }

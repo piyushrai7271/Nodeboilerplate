@@ -4,6 +4,11 @@ import {
   userValidateToken as tokenValidation,
 } from "../../../middleware/Token/tokenAuth.middleware.js";
 import {
+  loginLimiter,
+  otpVerifyLimiter,
+  otpResendLimiter,
+} from "../../../middleware/Token/rateLimiter.js";
+import {
   register,
   verfyOtp,
   resendOtp,
@@ -21,16 +26,26 @@ const router = express.Router();
 
 //Routes...
 router.post("/register", register);
-router.post("/verfy-Otp",otpValidation, verfyOtp);
-router.post("/resend-Otp",otpValidation, resendOtp);
-router.post("/login", login);
-router.post("/change-password",tokenValidation, changePassword);
-router.post("/add-profile-details",tokenValidation,upload.single("profileImage"), addProfileDetails);
-router.put("/update-user-detaile",tokenValidation,upload.single("profileImage"), updateUserDetails);
-router.get("/get-user-detail",tokenValidation, getUserDetail);
-router.get("/get-all-user-details",tokenValidation, getAllUserDetails);
-router.delete("/soft-delete-user",tokenValidation, softDeleteUser);
-router.delete("/hard-delete-user",tokenValidation, hardDeleteUser);
-router.post("/logout",tokenValidation, logOut);
+router.post("/verfy-Otp", otpVerifyLimiter, otpValidation, verfyOtp);
+router.post("/resend-Otp",otpResendLimiter, otpValidation, resendOtp);
+router.post("/login",loginLimiter, login);
+router.post("/change-password", tokenValidation, changePassword);
+router.post(
+  "/add-profile-details",
+  tokenValidation,
+  upload.single("profileImage"),
+  addProfileDetails
+);
+router.put(
+  "/update-user-detaile",
+  tokenValidation,
+  upload.single("profileImage"),
+  updateUserDetails
+);
+router.get("/get-user-detail", tokenValidation, getUserDetail);
+router.get("/get-all-user-details", tokenValidation, getAllUserDetails);
+router.delete("/soft-delete-user", tokenValidation, softDeleteUser);
+router.delete("/hard-delete-user", tokenValidation, hardDeleteUser);
+router.post("/logout", tokenValidation, logOut);
 
 export default router;

@@ -22,20 +22,23 @@ const userTokenSchema = new mongoose.Schema(
     mobileNumber: {
       type: String,
       required: true,
+      unique: true,
+      trim: true,
       match: [/^\d{10}$/, "Please enter a valid 10-digit phone number"],
     },
     password: {
       type: String,
-      required: [true, "password is required"],
+      required: [true, "Password is required"],
     },
     profileImage: {
-      //cloudinary image save
+      // Cloudinary image save
       type: String,
       default: "",
     },
     address: {
       type: String,
       default: "",
+      trim: true,
     },
     gender: {
       type: String,
@@ -48,13 +51,13 @@ const userTokenSchema = new mongoose.Schema(
       type: String,
     },
     dob: {
-      type: String,
+      type: Date,
     },
     heighestQualification: {
       type: String,
       enum: [
-        "Heigh School",
-        "Intermediat",
+        "High School",
+        "Intermediate",
         "Graduation",
         "Post-graduation",
         "Phd",
@@ -69,7 +72,7 @@ const userTokenSchema = new mongoose.Schema(
       default: "",
     },
     isVerified: {
-      type: Boolean, // email verification
+      type: Boolean, // Email verification
       default: false,
     },
     otp: {
@@ -87,11 +90,10 @@ userTokenSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }
-  // hashing otp
+  // Hashing otp
   if (this.isModified("otp") && this.otp && !this.otp.startsWith("$2b$")) {
     this.otp = await bcrypt.hash(this.otp.toString(), 10);
   }
-
   next();
 });
 
@@ -124,7 +126,8 @@ userTokenSchema.methods.generateRefreshToken = function () {
     expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
   });
 };
-// 🔑 generating token for otp
+
+// 🔑 Generate OTP Token
 userTokenSchema.methods.generateOtpToken = function () {
   return jwt.sign({ _id: this._id }, process.env.OTP_TOKEN_SECRET, {
     expiresIn: process.env.OTP_TOKEN_EXPIRY,
