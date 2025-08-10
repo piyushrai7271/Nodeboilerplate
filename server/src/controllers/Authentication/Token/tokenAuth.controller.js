@@ -114,122 +114,122 @@ const register = async (req, res) => {
     });
   }
 };
-const verfyOtp = async (req, res) => {
+const verifyOtp = async (req, res) => {
   try {
-    const { otp } = req.otp;
+    // 1️⃣ Validate input
+    const { otp } = req.body;
     const userId = req.userId;
 
-    //validate comming input
     if (!otp) {
       return res.status(400).json({
         success: false,
-        message: "Otp is required",
+        message: "OTP is required",
       });
     }
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: user not found in request",
+        message: "Unauthorized: Missing user information",
       });
     }
-    //find user with user id
+
+    // 2️⃣ Find user & validate OTP existence
     const user = await UserToken.findById(userId);
     if (!user || !user.otp || !user.otpExpiresAt) {
       return res.status(400).json({
         success: false,
-        message: "No Otp found or user already verified",
+        message: "Invalid or expired OTP request",
       });
     }
 
-    //check expiration
-    const isExpired = Date.now() > new Date(user.otpExpiresAt).getTime();
-    if (isExpired) {
+    // 3️⃣ Check OTP expiration
+    if (Date.now() > new Date(user.otpExpiresAt).getTime()) {
       return res.status(400).json({
         success: false,
-        message: "Otp has expired. please request a new one.",
+        message: "OTP has expired. Please request a new one.",
       });
     }
 
-    //verify Otp
+    // 4️⃣ Verify OTP correctness
     const isOtpCorrect = await user.isOtpCorrect(otp);
     if (!isOtpCorrect) {
       return res.status(400).json({
         success: false,
-        message: "Invalid OTP !!",
+        message: "Invalid OTP",
       });
     }
-    // mark user verified and clear otp
+
+    // 5️⃣ Mark user as verified & clear OTP fields
     user.isVerified = true;
     user.otp = null;
     user.otpExpiresAt = null;
     await user.save();
 
-    //return successful message
+    // 6️⃣ Send success response
     return res.status(200).json({
       success: true,
-      message: "OTP verified successfully. you can log in",
+      message: "OTP verified successfully. You can now log in.",
     });
   } catch (error) {
-    console.error("Error in verify Otp :", error);
+    console.error("Error in verifyOtp:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal Server error !!",
+      message: "Internal server error",
     });
   }
 };
 const resendOtp = async (req, res) => {
   try {
+    // 1️⃣ Get user from request
     const user = req.user;
 
-    // 1️⃣ Ensure user is present in request (comes from middleware)
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: User not found in request",
+        message: "Unauthorized: User not found",
       });
     }
 
-    // 2️⃣ Prevent resending if already verified
+    // 2️⃣ Check if user already verified
     if (user.isVerified) {
-      return res.status(409).json({
+      return res.status(400).json({
         success: false,
-        message: "Email is already verified. No need to resend OTP.",
+        message: "Email already verified",
       });
     }
 
-    // 3️⃣ Send OTP
-    const otpResponse = await sendOtpVerifyEmail(user);
+    // 3️⃣ Send OTP email
+    const response = await sendOtpVerifyEmail(user);
 
-    if (!otpResponse.success) {
-      return res.status(502).json({ // 502 since it's a failure from an external service (email sending)
-        success: false,
-        message: "Failed to resend OTP. Please try again later.",
+    // 4️⃣ Check email sending result
+    if (response.success) {
+      return res.status(200).json({
+        success: true,
+        message: "OTP resent successfully",
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "OTP resent successfully",
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend OTP. Please try again later",
     });
-
   } catch (error) {
     console.error("Resend OTP error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal Server Error",
+      message: "Internal server error",
     });
   }
 };
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-
     // 1️⃣ Validate input
+    const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required.",
+        message: "Email and password are required",
       });
     }
 
@@ -238,28 +238,28 @@ const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password.",
+        message: "Invalid email or password",
       });
     }
 
-    // 3️⃣ Check verification status
+    // 3️⃣ Check email verification
     if (!user.isVerified) {
       return res.status(403).json({
         success: false,
-        message: "Email not verified. Please verify before logging in.",
+        message: "Please verify your email before logging in",
       });
     }
 
-    // 4️⃣ Compare password
+    // 4️⃣ Verify password
     const isPasswordCorrect = await user.isPasswordCorrect(password);
     if (!isPasswordCorrect) {
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password.",
+        message: "Invalid email or password",
       });
     }
 
-    // 5️⃣ Generate tokens
+    // 5️⃣ Generate access & refresh tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
     // 6️⃣ Store refresh token in DB
@@ -267,46 +267,41 @@ const login = async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     // 7️⃣ Remove sensitive data
-    const sanitizedUser = user.toObject();
-    delete sanitizedUser.password;
-    delete sanitizedUser.refreshToken;
-    delete sanitizedUser.otp;
-    delete sanitizedUser.otpExpiresAt;
+    const loggedInUser = await UserToken.findById(user._id).select(
+      "-password -refreshToken -otp -otpExpiresAt"
+    );
 
-    // 8️⃣ Set cookie options
-    const cookieOptions = {
+    // 8️⃣ Cookie options
+    const options = {
       httpOnly: true,
       secure: true,
       sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     };
 
     // 9️⃣ Send success response
     return res
       .status(200)
-      .cookie("accessToken", accessToken, cookieOptions)
-      .cookie("refreshToken", refreshToken, cookieOptions)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
       .json({
         success: true,
-        message: "Logged in successfully.",
+        message: "Logged in successfully",
         accessToken,
-        user: sanitizedUser,
+        user: loggedInUser,
       });
-
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error.",
-      error: error.message,
+      message: "Internal server error",
     });
   }
 };
 const changePassword = async (req, res) => {
   try {
+    // 1️⃣ Validate input presence
     const { currentPassword, newPassword, confirmPassword } = req.body;
-
-    // Validate input presence
     if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -314,7 +309,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Get user from request
+    // 2️⃣ Get user from request
     const user = await UserToken.findById(req.userId);
     if (!user) {
       return res.status(401).json({
@@ -323,7 +318,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Check if user is verified
+    // 3️⃣ Check verification status
     if (!user.isVerified) {
       return res.status(403).json({
         success: false,
@@ -331,7 +326,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Check current password
+    // 4️⃣ Validate current password
     const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
     if (!isPasswordCorrect) {
       return res.status(401).json({
@@ -340,7 +335,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Validate new password strength
+    // 5️⃣ Validate new password strength
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
@@ -351,7 +346,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Check new vs confirm
+    // 6️⃣ Check if new passwords match
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -359,10 +354,11 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Update password (hashed via pre-save hook)
+    // 7️⃣ Update password
     user.password = newPassword;
     await user.save();
 
+    // 8️⃣ Send success response
     return res.status(200).json({
       success: true,
       message: "Password changed successfully",
@@ -377,8 +373,9 @@ const changePassword = async (req, res) => {
 };
 const addProfileDetails = async (req, res) => {
   try {
+    // 1️⃣ Extract request body fields & uploaded file
     const {
-      profileImage, // only direct URL now
+      profileImage, // optional: direct URL
       address,
       gender,
       fathersName,
@@ -386,60 +383,53 @@ const addProfileDetails = async (req, res) => {
       dob,
       heighestQualification,
     } = req.body;
+    const uploadedFile = req.file; // from multer (Cloudinary)
 
-    const uploadedFile = req.file; // multer file from Cloudinary
-
-    // Validation
-    const missingField = !(profileImage || uploadedFile)
-      ? "profileImage"
-      : !address
-      ? "address"
-      : !gender
-      ? "gender"
-      : !fathersName
-      ? "fathersName"
-      : !mothersName
-      ? "mothersName"
-      : !dob
-      ? "dob"
-      : !heighestQualification
-      ? "heighestQualification"
-      : null;
+    // 2️⃣ Validate required fields
+    const missingField =
+      !(profileImage || uploadedFile) ? "profileImage" :
+      !address ? "address" :
+      !gender ? "gender" :
+      !fathersName ? "fathersName" :
+      !mothersName ? "mothersName" :
+      !dob ? "dob" :
+      !heighestQualification ? "heighestQualification" :
+      null;
 
     if (missingField) {
       return res.status(400).json({
         success: false,
-        message: `${missingField} is missing !!`,
+        message: `${missingField} is required`,
       });
     }
 
-    // Get userId from middleware auth
+    // 3️⃣ Get userId from authentication middleware
     const userId = req.userId;
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "User is unauthorized, userId not found",
+        message: "Unauthorized: Missing user credentials",
       });
     }
 
-    // Find user
+    // 4️⃣ Find user in database
     const user = await UserToken.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found with given ID",
+        message: "User not found",
       });
     }
 
-    // Set profile image from either uploaded file or direct URL
-    let finalProfileImageUrl = user.profileImage;
+    // 5️⃣ Determine final profile image URL
+    let finalProfileImageUrl = user.profileImage; // keep existing if nothing new
     if (uploadedFile?.path) {
-      finalProfileImageUrl = uploadedFile.path; // multer-cloudinary URL
+      finalProfileImageUrl = uploadedFile.path; // Cloudinary URL
     } else if (profileImage && profileImage.startsWith("http")) {
-      finalProfileImageUrl = profileImage; // direct URL
+      finalProfileImageUrl = profileImage; // valid direct URL
     }
 
-    // Update user
+    // 6️⃣ Update user profile details
     user.profileImage = finalProfileImageUrl;
     user.address = address;
     user.gender = gender;
@@ -450,27 +440,36 @@ const addProfileDetails = async (req, res) => {
 
     await user.save();
 
+    // 7️⃣ Send success response
     return res.status(200).json({
       success: true,
       message: "Profile details updated successfully",
-      data: user,
+      data: {
+        profileImage: user.profileImage,
+        address: user.address,
+        gender: user.gender,
+        fathersName: user.fathersName,
+        mothersName: user.mothersName,
+        dob: user.dob,
+        heighestQualification: user.heighestQualification,
+      },
     });
   } catch (error) {
-    console.error("Error while Adding profile detail:", error);
+    console.error("Error in addProfileDetails:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server Error !!",
-      error: error.message,
+      message: "Internal server error",
     });
   }
 };
 const updateUserDetails = async (req, res) => {
   try {
+    // 1️⃣ Extract request body & uploaded file
     const {
       fullName,
       email,
       mobileNumber,
-      profileImage, // only for direct URLs
+      profileImage, // optional direct URL
       address,
       gender,
       fathersName,
@@ -478,35 +477,62 @@ const updateUserDetails = async (req, res) => {
       dob,
       heighestQualification,
     } = req.body;
-
     const uploadedFile = req.file; // multer-cloudinary uploaded file
 
-    // Check userId from middleware
+    // 2️⃣ Get userId from authentication middleware
     const userId = req.userId;
     if (!userId) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        message: "Unauthorized user without user Id",
+        message: "Unauthorized: Missing user credentials",
       });
     }
 
-    // Find user
-    const user = await UserToken.findById(userId);
+    // 3️⃣ Fetch user & check duplicates in one go
+    const [user, duplicateUser] = await Promise.all([
+      UserToken.findById(userId),
+      UserToken.findOne({
+        _id: { $ne: userId },
+        $or: [
+          email ? { email } : null,
+          mobileNumber ? { mobileNumber } : null,
+        ].filter(Boolean),
+        isDeleted: false,
+      }),
+    ]);
+
+    // 4️⃣ Handle missing user
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found with provided Id",
+        message: "User not found",
       });
     }
 
-    // Handle profileImage update
+    // 5️⃣ Handle duplicate email or mobileNumber
+    if (duplicateUser) {
+      if (email && duplicateUser.email === email) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already registered with another account",
+        });
+      }
+      if (mobileNumber && duplicateUser.mobileNumber === mobileNumber) {
+        return res.status(409).json({
+          success: false,
+          message: "Mobile number is already registered with another account",
+        });
+      }
+    }
+
+    // 6️⃣ Update profile image
     if (uploadedFile?.path) {
-      user.profileImage = uploadedFile.path; // multer-cloudinary URL
+      user.profileImage = uploadedFile.path; // Cloudinary URL
     } else if (profileImage && profileImage.startsWith("http")) {
       user.profileImage = profileImage; // direct URL
     }
 
-    // Update only provided fields
+    // 7️⃣ Update other provided fields (only if given)
     if (fullName) user.fullName = fullName;
     if (email) user.email = email;
     if (mobileNumber) user.mobileNumber = mobileNumber;
@@ -515,53 +541,74 @@ const updateUserDetails = async (req, res) => {
     if (fathersName) user.fathersName = fathersName;
     if (mothersName) user.mothersName = mothersName;
     if (dob) user.dob = dob;
-    if (heighestQualification)
-      user.heighestQualification = heighestQualification;
+    if (heighestQualification) user.heighestQualification = heighestQualification;
 
+    // 8️⃣ Save updated user
     await user.save();
 
+    // 9️⃣ Respond with sanitized data
     return res.status(200).json({
       success: true,
       message: "User details updated successfully",
-      data: user,
+      data: {
+        fullName: user.fullName,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+        profileImage: user.profileImage,
+        address: user.address,
+        gender: user.gender,
+        fathersName: user.fathersName,
+        mothersName: user.mothersName,
+        dob: user.dob,
+        heighestQualification: user.heighestQualification,
+      },
     });
   } catch (error) {
-    console.error("Error while updating user data:", error);
+    console.error("Error in updateUserDetails:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error !!",
-      error: error.message,
+      message: "Internal server error",
     });
   }
 };
 const getUserDetail = async (req, res) => {
   try {
+    // 1️⃣ Extract userId from authentication middleware
     const userId = req.userId;
 
-    // ✅ Validate userId
+    // 2️⃣ Validate that userId is present
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: userId is missing",
+        message: "Unauthorized: User ID is missing from request",
       });
     }
 
-    // ✅ Find user (no password, lean object for performance)
+    // 3️⃣ Fetch user details (exclude sensitive fields for security)
     const user = await UserToken.findById(userId)
-      .select("-password -otp -refreshToken")
+      .select("-password -otp -refreshToken -otpExpiresAt")
       .lean();
 
+    // 4️⃣ Handle case: User not found
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found with provided ID",
       });
     }
 
-    // ✅ Return user details
+    // 5️⃣ Block soft-deleted accounts from accessing details
+    if (user.isDeleted) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deleted. Please contact support to restore access.",
+      });
+    }
+
+    // 6️⃣ Respond with sanitized user details
     return res.status(200).json({
       success: true,
-      message: "User detail fetched successfully",
+      message: "User details fetched successfully",
       data: {
         id: user._id,
         fullName: user.fullName,
@@ -575,35 +622,38 @@ const getUserDetail = async (req, res) => {
         dob: user.dob,
         heighestQualification: user.heighestQualification,
         isVerified: user.isVerified,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
     });
   } catch (error) {
-    console.error("Error while finding user details:", error);
+    // 7️⃣ Log error and return generic message
+    console.error("Error in getUserDetail:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
 const getAllUserDetails = async (req, res) => {
   try {
-    // ✅ Pagination params (defaults: page=1, limit=10)
+    // 1️⃣ Pagination params (defaults: page=1, limit=10)
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // ✅ Total user count
+    // 2️⃣ Total user count excluding soft-deleted accounts
     const totalUsers = await UserToken.countDocuments({ isDeleted: false });
 
-    // ✅ Fetch paginated users (excluding sensitive fields)
+    // 3️⃣ Fetch paginated users (excluding sensitive fields & deleted users)
     const users = await UserToken.find({ isDeleted: false })
-      .select("-password -otp -refreshToken")
+      .select("-password -otp -refreshToken -otpExpiresAt")
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }) // newest first
       .lean();
 
+    // 4️⃣ Respond with paginated data
     return res.status(200).json({
       success: true,
       message: "Users fetched successfully",
@@ -616,61 +666,72 @@ const getAllUserDetails = async (req, res) => {
       data: users,
     });
   } catch (error) {
+    // 5️⃣ Log error and return generic message
     console.error("Error while fetching all users:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
 const softDeleteUser = async (req, res) => {
   try {
+    // 1️⃣ Extract userId from authentication middleware
     const userId = req.userId;
 
+    // 2️⃣ Validate that userId is present
     if (!userId) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        message: "User ID is missing",
+        message: "Unauthorized: User ID is missing from request",
       });
     }
 
+    // 3️⃣ Find user in database
     const existingUser = await UserToken.findById(userId);
+
+    // 4️⃣ Handle case: User not found
     if (!existingUser) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found with provided ID",
       });
     }
 
+    // 5️⃣ Prevent re-deleting an already soft-deleted account
     if (existingUser.isDeleted) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: "User is already deleted",
+        message: "User account is already deleted",
       });
     }
 
+    // 6️⃣ Perform soft delete + set deletion timestamp
     existingUser.isDeleted = true;
+    existingUser.deletedAt = new Date(); // 🕒 Track deletion time
     await existingUser.save();
 
+    // 7️⃣ Respond with success
     return res.status(200).json({
       success: true,
-      message: "User soft deleted successfully",
+      message: "User account soft-deleted successfully",
+      deletedAt: existingUser.deletedAt, // Optional: return timestamp
     });
   } catch (error) {
-    console.error("Error while soft deleting user:", error);
+    // 8️⃣ Log error and return generic internal error
+    console.error("Error in softDeleteUser:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal Server Error",
-      error: error.message,
+      message: "Internal server error",
     });
   }
 };
 const hardDeleteUser = async (req, res) => {
   try {
-    const userId = req.userId; // for self-deletion; for admin deletion, use req.params.id
+    // 1️⃣ Get userId (self-deletion from token; admin deletion can use req.params.id)
+    const userId = req.userId || req.params.id;
 
-    // 🔹 Validate userId
+    // 2️⃣ Validate userId
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -678,59 +739,54 @@ const hardDeleteUser = async (req, res) => {
       });
     }
 
-    // 🔹 Find user
+    // 3️⃣ Find user in DB
     const user = await UserToken.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found with provided ID",
       });
     }
 
-    // 🔹 If user has Cloudinary profile image, delete it
+    // 4️⃣ If Cloudinary profile image exists, try to delete it
     if (user.profileImage) {
       try {
-        // Extract public_id from Cloudinary URL
         const publicIdMatch = user.profileImage.match(/\/([^/]+)\.[a-zA-Z]+$/);
-        if (publicIdMatch && publicIdMatch[1]) {
+        if (publicIdMatch?.[1]) {
           const publicId = `CTRD/${publicIdMatch[1]}`;
-          await cloudinary.uploader.destroy(publicId, {
-            resource_type: "image",
-          });
+          await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
         }
       } catch (err) {
-        console.error(
-          "⚠️ Failed to delete image from Cloudinary:",
-          err.message
-        );
-        // We log the error but still continue with DB deletion
+        console.error("⚠️ Failed to delete image from Cloudinary:", err.message);
+        // Continue deletion process even if image removal fails
       }
     }
 
-    // 🔹 Delete user from DB
+    // 5️⃣ Permanently delete user from DB
     await UserToken.findByIdAndDelete(userId);
 
+    // 6️⃣ Return success response
     return res.status(200).json({
       success: true,
       message: "User permanently deleted successfully",
     });
   } catch (error) {
+    // 7️⃣ Log and return error
     console.error("❌ Error while hard deleting user:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal Server Error",
-      error: error.message,
+      message: "Internal server error",
     });
   }
 };
 const logOut = async (req, res) => {
   try {
-    // Optional: Remove refreshToken from user in DB
-    if (req.user) {
+    // 1️⃣ Remove refreshToken from DB if user is logged in
+    if (req.user?._id) {
       await UserToken.findByIdAndUpdate(req.user._id, { refreshToken: "" });
     }
 
-    // Clear cookies
+    // 2️⃣ Clear authentication cookies
     res
       .clearCookie("accessToken", {
         httpOnly: true,
@@ -743,12 +799,14 @@ const logOut = async (req, res) => {
         sameSite: "None",
       });
 
+    // 3️⃣ Respond with success message
     return res.status(200).json({
       success: true,
       message: "Logged out successfully",
     });
   } catch (error) {
-    console.error("Logout error:", error);
+    // 4️⃣ Log and return error
+    console.error("❌ Logout error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -756,9 +814,10 @@ const logOut = async (req, res) => {
   }
 };
 
+
 export {
   register,
-  verfyOtp,
+  verifyOtp,
   resendOtp,
   login,
   changePassword,

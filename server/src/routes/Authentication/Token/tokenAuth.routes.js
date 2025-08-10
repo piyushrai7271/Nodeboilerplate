@@ -10,7 +10,7 @@ import {
 } from "../../../middleware/Token/rateLimiter.js";
 import {
   register,
-  verfyOtp,
+  verifyOtp,
   resendOtp,
   login,
   changePassword,
@@ -26,9 +26,9 @@ const router = express.Router();
 
 //Routes...
 router.post("/register", register);
-router.post("/verfy-Otp", otpVerifyLimiter, otpValidation, verfyOtp);
-router.post("/resend-Otp",otpResendLimiter, otpValidation, resendOtp);
-router.post("/login",loginLimiter, login);
+router.post("/verfy-Otp", otpVerifyLimiter, otpValidation, verifyOtp);
+router.post("/resend-Otp", otpResendLimiter, otpValidation, resendOtp);
+router.post("/login", loginLimiter, login);
 router.post("/change-password", tokenValidation, changePassword);
 router.post(
   "/add-profile-details",
