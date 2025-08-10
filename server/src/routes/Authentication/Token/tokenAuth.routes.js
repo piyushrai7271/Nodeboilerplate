@@ -13,7 +13,7 @@ import {
   updateUserDetails,
   getUserDetail,
   getAllUserDetails,
-  softDaleteUser,
+  softDeleteUser,
   hardDeleteUser,
   logOut,
 } from "../../../controllers/Authentication/Token/tokenAuth.controller.js";
@@ -26,10 +26,10 @@ router.post("/resend-Otp",otpValidation, resendOtp);
 router.post("/login", login);
 router.post("/change-password",tokenValidation, changePassword);
 router.post("/add-profile-details",tokenValidation,upload.single("profileImage"), addProfileDetails);
-router.put("/update-user-detaile",tokenValidation, updateUserDetails);
+router.put("/update-user-detaile",tokenValidation,upload.single("profileImage"), updateUserDetails);
 router.get("/get-user-detail",tokenValidation, getUserDetail);
 router.get("/get-all-user-details",tokenValidation, getAllUserDetails);
-router.delete("/soft-delete-user",tokenValidation, softDaleteUser);
+router.delete("/soft-delete-user",tokenValidation, softDeleteUser);
 router.delete("/hard-delete-user",tokenValidation, hardDeleteUser);
 router.post("/logout",tokenValidation, logOut);
 

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
+import {cloudinary} from "../../../config/cloudinary.js";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -377,22 +378,21 @@ const addProfileDetails = async (req, res) => {
     const uploadedFile = req.file; // multer file from Cloudinary
 
     // Validation
-    const missingField =
-      !(profileImage || uploadedFile)
-        ? "profileImage"
-        : !address
-        ? "address"
-        : !gender
-        ? "gender"
-        : !fathersName
-        ? "fathersName"
-        : !mothersName
-        ? "mothersName"
-        : !dob
-        ? "dob"
-        : !heighestQualification
-        ? "heighestQualification"
-        : null;
+    const missingField = !(profileImage || uploadedFile)
+      ? "profileImage"
+      : !address
+      ? "address"
+      : !gender
+      ? "gender"
+      : !fathersName
+      ? "fathersName"
+      : !mothersName
+      ? "mothersName"
+      : !dob
+      ? "dob"
+      : !heighestQualification
+      ? "heighestQualification"
+      : null;
 
     if (missingField) {
       return res.status(400).json({
@@ -452,11 +452,260 @@ const addProfileDetails = async (req, res) => {
     });
   }
 };
-const updateUserDetails = async (req, res) => {};
-const getUserDetail = async (req, res) => {};
-const getAllUserDetails = async (req, res) => {};
-const softDaleteUser = async (req, res) => {};
-const hardDeleteUser = async (req, res) => {};
+const updateUserDetails = async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      mobileNumber,
+      profileImage, // only for direct URLs
+      address,
+      gender,
+      fathersName,
+      mothersName,
+      dob,
+      heighestQualification,
+    } = req.body;
+
+    const uploadedFile = req.file; // multer-cloudinary uploaded file
+
+    // Check userId from middleware
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unauthorized user without user Id",
+      });
+    }
+
+    // Find user
+    const user = await UserToken.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found with provided Id",
+      });
+    }
+
+    // Handle profileImage update
+    if (uploadedFile?.path) {
+      user.profileImage = uploadedFile.path; // multer-cloudinary URL
+    } else if (profileImage && profileImage.startsWith("http")) {
+      user.profileImage = profileImage; // direct URL
+    }
+
+    // Update only provided fields
+    if (fullName) user.fullName = fullName;
+    if (email) user.email = email;
+    if (mobileNumber) user.mobileNumber = mobileNumber;
+    if (address) user.address = address;
+    if (gender) user.gender = gender;
+    if (fathersName) user.fathersName = fathersName;
+    if (mothersName) user.mothersName = mothersName;
+    if (dob) user.dob = dob;
+    if (heighestQualification) user.heighestQualification = heighestQualification;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "User details updated successfully",
+      data: user,
+    });
+
+  } catch (error) {
+    console.error("Error while updating user data:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error !!",
+      error: error.message,
+    });
+  }
+};
+const getUserDetail = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // ✅ Validate userId
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: userId is missing",
+      });
+    }
+
+    // ✅ Find user (no password, lean object for performance)
+    const user = await UserToken.findById(userId)
+      .select("-password -otp -refreshToken")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ✅ Return user details
+    return res.status(200).json({
+      success: true,
+      message: "User detail fetched successfully",
+      data: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+        profileImage: user.profileImage,
+        address: user.address,
+        gender: user.gender,
+        fathersName: user.fathersName,
+        mothersName: user.mothersName,
+        dob: user.dob,
+        heighestQualification: user.heighestQualification,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (error) {
+    console.error("Error while finding user details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+const getAllUserDetails = async (req, res) => {
+  try {
+    // ✅ Pagination params (defaults: page=1, limit=10)
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // ✅ Total user count
+    const totalUsers = await UserToken.countDocuments({ isDeleted: false });
+
+    // ✅ Fetch paginated users (excluding sensitive fields)
+    const users = await UserToken.find({ isDeleted: false })
+      .select("-password -otp -refreshToken")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }) // newest first
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Users fetched successfully",
+      pagination: {
+        totalUsers,
+        currentPage: page,
+        totalPages: Math.ceil(totalUsers / limit),
+        pageSize: limit,
+      },
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error while fetching all users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+const softDeleteUser = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is missing",
+      });
+    }
+
+    const existingUser = await UserToken.findById(userId);
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (existingUser.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message: "User is already deleted",
+      });
+    }
+
+    existingUser.isDeleted = true;
+    await existingUser.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "User soft deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error while soft deleting user:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+const hardDeleteUser = async (req, res) => {
+  try {
+    const userId = req.userId; // for self-deletion; for admin deletion, use req.params.id
+
+    // 🔹 Validate userId
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is missing",
+      });
+    }
+
+    // 🔹 Find user
+    const user = await UserToken.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 🔹 If user has Cloudinary profile image, delete it
+    if (user.profileImage) {
+      try {
+        // Extract public_id from Cloudinary URL
+        const publicIdMatch = user.profileImage.match(/\/([^/]+)\.[a-zA-Z]+$/);
+        if (publicIdMatch && publicIdMatch[1]) {
+          const publicId = `CTRD/${publicIdMatch[1]}`;
+          await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+        }
+      } catch (err) {
+        console.error("⚠️ Failed to delete image from Cloudinary:", err.message);
+        // We log the error but still continue with DB deletion
+      }
+    }
+
+    // 🔹 Delete user from DB
+    await UserToken.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "User permanently deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error while hard deleting user:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
 const logOut = async (req, res) => {
   try {
     // Optional: Remove refreshToken from user in DB
@@ -500,7 +749,7 @@ export {
   updateUserDetails,
   getUserDetail,
   getAllUserDetails,
-  softDaleteUser,
+  softDeleteUser,
   hardDeleteUser,
   logOut,
 };
