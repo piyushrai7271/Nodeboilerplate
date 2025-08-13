@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
 const otpAuthSchema = new mongoose.Schema(
   {
@@ -46,6 +47,7 @@ const otpAuthSchema = new mongoose.Schema(
     },
     otp: {
       type: String,
+      select: false,
     },
     otpExpiresAt: {
       type: Date,
@@ -61,19 +63,61 @@ const otpAuthSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,
+      select: false,
     },
     refreshToken: {
       type: String,
       default: "",
-    }
+    },
   },
   { timestamps: true }
 );
 
-// 🔒 Hash password and otp before saving
-// otpAuthSchema.pre("save", async function(next){
-//     if(!this.isModified("otp"))
-// })
+// 🔒 Hash OTP before saving
+otpAuthSchema.pre("save", async function (next) {
+  try {
+    // Only hash if OTP exists and is new or modified
+    if ((!this.isModified("otp") && !this.isNew) || !this.otp) {
+      return next();
+    }
+    this.otp = await bcrypt.hash(this.otp, 10);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🔐 Compare Otp
+otpAuthSchema.methods.isOtpCorrect = async function (inputOtp) {
+  return await bcrypt.compare(inputOtp, this.otp);
+};
+
+// 🔑 Generate Access Token
+otpAuthSchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      fullName: this.fullName,
+      email: this.email,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+  );
+};
+
+// 🔄 Generate Refresh Token
+otpAuthSchema.methods.generateRefreshToken = function () {
+  return jwt.sign({ _id: this._id }, process.env.REFRESH_TOKEN_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+  });
+};
+
+// 🔑 Generate OTP Token
+otpAuthSchema.methods.generateOtpToken = function () {
+  return jwt.sign({ _id: this._id }, process.env.OTP_TOKEN_SECRET, {
+    expiresIn: process.env.OTP_TOKEN_EXPIRY,
+  });
+};
 
 const OtpAuth = mongoose.model("OtpAuth", otpAuthSchema);
 export default OtpAuth;
