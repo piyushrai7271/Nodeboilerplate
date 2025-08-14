@@ -1,6 +1,6 @@
 import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
 import { cloudinary } from "../../../config/cloudinary.js";
-import {sendOtpVerifyEmail} from "../../../utilles/Token/token.verifyEmail.js";
+import sendOtpVerifyEmail from "../../../utilles/Token/token.verifyEmail.js";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {

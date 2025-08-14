@@ -63,11 +63,11 @@ const otpAuthSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,
-      select: false,
     },
     refreshToken: {
       type: String,
       default: "",
+      select:false
     },
   },
   { timestamps: true }
@@ -77,7 +77,7 @@ const otpAuthSchema = new mongoose.Schema(
 otpAuthSchema.pre("save", async function (next) {
   try {
     // Only hash if OTP exists and is new or modified
-    if ((!this.isModified("otp") && !this.isNew) || !this.otp) {
+    if ((!this.isModified("otp") && !this.isNew) || !this.otp || !this.otp.trim()) {
       return next();
     }
     this.otp = await bcrypt.hash(this.otp, 10);
@@ -89,8 +89,12 @@ otpAuthSchema.pre("save", async function (next) {
 
 // 🔐 Compare Otp
 otpAuthSchema.methods.isOtpCorrect = async function (inputOtp) {
-  return await bcrypt.compare(inputOtp, this.otp);
+  if (this.otpExpiresAt && this.otpExpiresAt < Date.now()) {
+    return false; // expired
+  }
+  return bcrypt.compare(inputOtp, this.otp);
 };
+
 
 // 🔑 Generate Access Token
 otpAuthSchema.methods.generateAccessToken = function () {
