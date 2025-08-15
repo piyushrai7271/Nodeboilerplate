@@ -4,19 +4,12 @@ import bcrypt from "bcrypt";
 
 const otpAuthSchema = new mongoose.Schema(
   {
-    userName: {
-      type: String,
-      trim: true,
-      unique: true,
-      index: true,
-    },
     fullName: {
       type: String,
       trim: true,
     },
     email: {
       type: String,
-      trim: true,
       unique: true,
       index: true,
       lowercase: true,
@@ -29,7 +22,10 @@ const otpAuthSchema = new mongoose.Schema(
       type: String,
       index: true,
       unique: true,
-      match: [/^\d{10}$/, "Please enter a valid 10-digit phone number"],
+      match: [
+        /^(?:\+91|91)?[6-9]\d{9}$/,
+        "Please enter a valid Indian mobile number (10 digits, optionally with +91 or 91)",
+      ],
     },
     gender: {
       type: String,
@@ -41,7 +37,7 @@ const otpAuthSchema = new mongoose.Schema(
       trim: true,
     },
     profileImage: {
-      // Cloudinary image save
+      // Cloudinary image URL
       type: String,
       default: "",
     },
@@ -53,7 +49,7 @@ const otpAuthSchema = new mongoose.Schema(
       type: Date,
     },
     isVerified: {
-      type: Boolean, // Email verification
+      type: Boolean, // Email or Mobile verification
       default: false,
     },
     isDeleted: {
@@ -66,18 +62,22 @@ const otpAuthSchema = new mongoose.Schema(
     },
     refreshToken: {
       type: String,
-      default: "",
-      select:false
+      select: false,
     },
   },
   { timestamps: true }
 );
 
+// ✅ TODO: 🔒 In future, hash refreshToken for extra security 🔐
+
 // 🔒 Hash OTP before saving
 otpAuthSchema.pre("save", async function (next) {
   try {
-    // Only hash if OTP exists and is new or modified
-    if ((!this.isModified("otp") && !this.isNew) || !this.otp || !this.otp.trim()) {
+    if (
+      (!this.isModified("otp") && !this.isNew) ||
+      !this.otp ||
+      !this.otp.trim()
+    ) {
       return next();
     }
     this.otp = await bcrypt.hash(this.otp, 10);
@@ -87,14 +87,13 @@ otpAuthSchema.pre("save", async function (next) {
   }
 });
 
-// 🔐 Compare Otp
+// 🔐 Compare OTP with expiry check
 otpAuthSchema.methods.isOtpCorrect = async function (inputOtp) {
-  if (this.otpExpiresAt && this.otpExpiresAt < Date.now()) {
-    return false; // expired
+  if (!this.otpExpiresAt || Date.now() > this.otpExpiresAt.getTime()) {
+    return false; // Expired
   }
   return bcrypt.compare(inputOtp, this.otp);
 };
-
 
 // 🔑 Generate Access Token
 otpAuthSchema.methods.generateAccessToken = function () {
@@ -123,5 +122,5 @@ otpAuthSchema.methods.generateOtpToken = function () {
   });
 };
 
-const OtpAuth = mongoose.model("OtpAuth", otpAuthSchema);
-export default OtpAuth;
+const UserOtp = mongoose.model("UserOtp", otpAuthSchema);
+export default UserOtp;
