@@ -2,6 +2,7 @@ import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
 import { cloudinary } from "../../../config/cloudinary.js";
 import sendOtpVerifyEmail from "../../../utilles/Token/token.verifyEmail.js";
 
+
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await UserToken.findById(userId);
@@ -260,7 +261,9 @@ const login = async (req, res) => {
     }
 
     // 5️⃣ Generate access & refresh tokens
-    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
 
     // 6️⃣ Store refresh token in DB
     user.refreshToken = refreshToken;
@@ -386,15 +389,21 @@ const addProfileDetails = async (req, res) => {
     const uploadedFile = req.file; // from multer (Cloudinary)
 
     // 2️⃣ Validate required fields
-    const missingField =
-      !(profileImage || uploadedFile) ? "profileImage" :
-      !address ? "address" :
-      !gender ? "gender" :
-      !fathersName ? "fathersName" :
-      !mothersName ? "mothersName" :
-      !dob ? "dob" :
-      !heighestQualification ? "heighestQualification" :
-      null;
+    const missingField = !(profileImage || uploadedFile)
+      ? "profileImage"
+      : !address
+      ? "address"
+      : !gender
+      ? "gender"
+      : !fathersName
+      ? "fathersName"
+      : !mothersName
+      ? "mothersName"
+      : !dob
+      ? "dob"
+      : !heighestQualification
+      ? "heighestQualification"
+      : null;
 
     if (missingField) {
       return res.status(400).json({
@@ -429,6 +438,11 @@ const addProfileDetails = async (req, res) => {
       finalProfileImageUrl = profileImage; // valid direct URL
     }
 
+    // ✅ TODO: 🛠 Improve DOB handling
+    // Accept multiple date formats (DD-MM-YYYY, YYYY-MM-DD, MM/DD/YYYY)
+    // Normalize and store in ISO format before saving to MongoDB
+
+
     // 6️⃣ Update user profile details
     user.profileImage = finalProfileImageUrl;
     user.address = address;
@@ -439,7 +453,7 @@ const addProfileDetails = async (req, res) => {
     user.heighestQualification = heighestQualification;
 
     await user.save();
-
+    
     // 7️⃣ Send success response
     return res.status(200).json({
       success: true,
@@ -459,6 +473,7 @@ const addProfileDetails = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -541,7 +556,8 @@ const updateUserDetails = async (req, res) => {
     if (fathersName) user.fathersName = fathersName;
     if (mothersName) user.mothersName = mothersName;
     if (dob) user.dob = dob;
-    if (heighestQualification) user.heighestQualification = heighestQualification;
+    if (heighestQualification)
+      user.heighestQualification = heighestQualification;
 
     // 8️⃣ Save updated user
     await user.save();
@@ -568,6 +584,7 @@ const updateUserDetails = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+      error:error.message,
     });
   }
 };
@@ -601,7 +618,8 @@ const getUserDetail = async (req, res) => {
     if (user.isDeleted) {
       return res.status(403).json({
         success: false,
-        message: "Your account has been deleted. Please contact support to restore access.",
+        message:
+          "Your account has been deleted. Please contact support to restore access.",
       });
     }
 
@@ -754,10 +772,15 @@ const hardDeleteUser = async (req, res) => {
         const publicIdMatch = user.profileImage.match(/\/([^/]+)\.[a-zA-Z]+$/);
         if (publicIdMatch?.[1]) {
           const publicId = `CTRD/${publicIdMatch[1]}`;
-          await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+          await cloudinary.uploader.destroy(publicId, {
+            resource_type: "image",
+          });
         }
       } catch (err) {
-        console.error("⚠️ Failed to delete image from Cloudinary:", err.message);
+        console.error(
+          "⚠️ Failed to delete image from Cloudinary:",
+          err.message
+        );
         // Continue deletion process even if image removal fails
       }
     }
@@ -813,7 +836,6 @@ const logOut = async (req, res) => {
     });
   }
 };
-
 
 export {
   register,

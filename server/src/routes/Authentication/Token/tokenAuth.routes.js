@@ -1,5 +1,6 @@
 import express from "express";
-import {upload} from "../../../config/cloudinary.js";
+import { upload } from "../../../config/cloudinary.js";
+import handleUploadError from "../../../middleware/Token/uploadError.middleware.js";
 import {
   userValidateOtpToken as otpValidation,
   userValidateToken as tokenValidation,
@@ -33,7 +34,7 @@ const router = express.Router();
  *  - tokenValidation: Verifies user’s auth token.
  *  - otpValidation: Validates OTP token for OTP-related actions.
  *  - Rate Limiters: Prevent brute force or spam (per route).
- *  - upload.single("profileImage"): Handles profile image upload where required.
+ *  - upload.single("profileImage"): Handles profile image upload where required.and handled error handling
  */
 
 // 1️⃣ Registration & OTP Verification
@@ -49,13 +50,13 @@ router.post("/change-password", tokenValidation, changePassword); // Change pass
 router.post(
   "/add-profile-details",
   tokenValidation,
-  upload.single("profileImage"), // Handle single profile image upload
+  handleUploadError(upload.single("profileImage")), // Handle single profile image upload with error handling
   addProfileDetails
 );
 router.put(
   "/update-user-detaile",
   tokenValidation,
-  upload.single("profileImage"),
+  handleUploadError(upload.single("profileImage")),// Handle single profile image upload with error handling
   updateUserDetails
 );
 

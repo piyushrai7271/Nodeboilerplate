@@ -13,52 +13,80 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// ✅ Allowed formats
-const allowedFormats = [
-  "png", "jpg", "jpeg", "webp", "svg", "avif", // images
-  "pdf", "doc", "docx", "xls", "xlsx",        // documents
+// ✅ Allowed extensions and MIME types
+const allowedExtensions = [
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "svg",
+  "avif", // images
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx", // documents
 ];
 
-// 🌥️ Multer Cloudinary Storage
+const allowedMimeTypes = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+  "image/avif",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
+
+// ✅ Utility to sanitize file names (remove spaces & special chars)
+const sanitizeFileName = (filename) => {
+  return filename
+    .replace(/\s+/g, "_") // replace spaces with underscore
+    .replace(/[^a-zA-Z0-9._-]/g, ""); // remove special characters
+};
+
+// 🌥️ Multer Cloudinary Storage with auto resource type
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
     const ext = path.extname(file.originalname).toLowerCase().slice(1);
-    if (!allowedFormats.includes(ext)) {
-      throw new Error("❌ Invalid file type.");
+
+    if (!allowedExtensions.includes(ext)) {
+      throw new Error("Invalid file type. Allowed: images or docs only.");
     }
-    const resource_type = ["png", "jpg", "jpeg", "webp", "svg", "avif"].includes(ext)
-      ? "image"
-      : "raw";
+
+    const sanitizedName = sanitizeFileName(file.originalname);
+
     return {
-      folder: "CTRD",
-      resource_type,
+      folder: "NodeBoilerPlate", // ✅ Hardcoded folder name
+      resource_type: "auto", // ✅ Let Cloudinary decide (image/raw/video)
       type: "upload",
-      public_id: `${Date.now()}-${file.originalname}`,
+      public_id: `${Date.now()}-${sanitizedName}`,
     };
   },
 });
 
-// 📦 Multer middleware
+// 📦 Multer middleware with MIME type validation and error handling
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().slice(1);
-    if (!allowedFormats.includes(ext)) {
-      return cb(new Error("❌ Unsupported file type."), false);
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      return cb(new Error("Unsupported file type."), false);
     }
     cb(null, true);
   },
 });
 
 // 🌐 Public Cloudinary URL generator
-const getPublicCloudinaryUrl = (public_id, resource_type = "raw") => {
-  return cloudinary.url(`NODEBOILERPLATE/${public_id}`, {
-    resource_type,
+const getPublicCloudinaryUrl = (public_id) => {
+  return cloudinary.url(`NodeBoilerPlate/${public_id}`, {
+    resource_type: "auto",
     type: "upload",
     secure: true,
-    flags: "attachment:false",
   });
 };
 
