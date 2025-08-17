@@ -10,7 +10,6 @@ const otpAuthSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      unique: true,
       index: true,
       lowercase: true,
       match: [
@@ -21,7 +20,6 @@ const otpAuthSchema = new mongoose.Schema(
     mobileNumber: {
       type: String,
       index: true,
-      unique: true,
       match: [
         /^(?:\+91|91)?[6-9]\d{9}$/,
         "Please enter a valid Indian mobile number (10 digits, optionally with +91 or 91)",
@@ -47,10 +45,7 @@ const otpAuthSchema = new mongoose.Schema(
     },
     otpExpiresAt: {
       type: Date,
-    },
-    isVerified: {
-      type: Boolean, // Email or Mobile verification
-      default: false,
+      select: false
     },
     isDeleted: {
       type: Boolean,
@@ -67,6 +62,9 @@ const otpAuthSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 🔍 Index for faster lookups
+otpAuthSchema.index({ email: 1, mobileNumber: 1 });
 
 // ✅ TODO: 🔒 In future, hash refreshToken for extra security 🔐
 
