@@ -264,30 +264,6 @@ const resendOtp = async (req, res) => {
     });
   }
 };
-const forgetPassword = async (req, res) => {
-  try {
-    
-  } catch (error) {
-    console.error("Forget password error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-const resetPassword = async (req, res) => {
-  try {
-    
-  } catch (error) {
-    console.error("Reset password error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
 const addUserProfileDetail = async (req, res) => {
   try {
     const { fullName, gender, address, email, mobileNumber, profileImage } = req.body;

@@ -4,8 +4,6 @@ import {
   login,
   verifyOtp,
   resendOtp,
-  forgetPassword,
-  resetPassword,
   addUserProfileDetail,
   updateUserProfileDetail,
   getUserProfileDetail,
@@ -19,8 +17,6 @@ const router = express.Router();
 router.post("/login", login);
 router.post("/verify-otp", otpAuth, verifyOtp);
 router.post("/resend-otp", otpAuth, resendOtp);
-router.post("/forget-password", forgetPassword);
-router.post("/reset-password", otpAuth, resetPassword);
 router.post("/add-user-profile", otpAuth, addUserProfileDetail);
 router.put("/update-user-profile", otpAuth, updateUserProfileDetail);
 router.get("/get-user-profile", otpAuth, getUserProfileDetail);

@@ -374,6 +374,30 @@ const changePassword = async (req, res) => {
     });
   }
 };
+const forgetPassword = async (req, res) => {
+  try {
+    
+  } catch (error) {
+    console.error("Forget password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+const resetPassword = async (req, res) => {
+  try {
+    
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
 const addProfileDetails = async (req, res) => {
   try {
     // 1️⃣ Extract request body fields & uploaded file
@@ -843,6 +867,8 @@ export {
   resendOtp,
   login,
   changePassword,
+  forgetPassword,
+  resetPassword,
   addProfileDetails,
   updateUserDetails,
   getUserDetail,

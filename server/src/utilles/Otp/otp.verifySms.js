@@ -22,7 +22,7 @@ const otpVerifySms = async (user) => {
     await user.save();
 
     // 5️⃣ Prepare SMS content
-    const messageBody = `Your OTP for ${process.env.APP_NAME || "NODEBOILERPLATE"} is ${otp}. It is valid for 10 minutes. Do not share it with anyone.`;
+    const messageBody = `Your login OTP for ${process.env.APP_NAME || "NODEBOILERPLATE"} is ${otp}. It is valid for 10 minutes. Do not share it with anyone.`;
 
     // 6️⃣ Send SMS
     await client.messages.create({

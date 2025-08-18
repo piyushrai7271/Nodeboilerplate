@@ -16,6 +16,8 @@ import {
   resendOtp,
   login,
   changePassword,
+  forgetPassword,
+  resetPassword,
   addProfileDetails,
   updateUserDetails,
   getUserDetail,
@@ -45,6 +47,8 @@ router.post("/resend-Otp", otpResendLimiter, otpValidation, resendOtp); // Resen
 // 2️⃣ Login & Password Management
 router.post("/login", loginLimiter, login); // Login with credentials
 router.post("/change-password", tokenValidation, changePassword); // Change password (authenticated)
+router.post("/forget-password",forgetPassword); // Request password reset link
+router.post("/reset-password", otpValidation, resetPassword); // Reset password using OTP
 
 // 3️⃣ Profile Management
 router.post(
