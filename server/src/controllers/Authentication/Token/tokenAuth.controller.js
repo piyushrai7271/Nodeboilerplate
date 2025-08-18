@@ -376,7 +376,55 @@ const changePassword = async (req, res) => {
 };
 const forgetPassword = async (req, res) => {
   try {
-    
+    const { email } = req.body;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+    }
+
+    // 1️⃣ Validate email presence
+    if(!email){
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    // 2️⃣ Find user by email
+    const user = await UserToken.find({ email, isDeleted: false });
+    if(!user || user.length === 0){
+      return res.status(404).json({
+        success: false,
+        message: "User not found with this email",
+      });
+    }
+
+    // 3️⃣ Check if user is verified
+    if (!user[0].isVerified){
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email before resetting password",
+      });
+    }
+
+    const result = await resetPasswordOtpEmail(user[0]);
+
+    if(result.success){
+      return res.status(200).json({
+        success: true,
+        message: "Reset password OTP sent to your email",
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send reset password OTP. Please try again later",
+      });
+    }
+
   } catch (error) {
     console.error("Forget password error:", error);
     return res.status(500).json({
@@ -388,7 +436,63 @@ const forgetPassword = async (req, res) => {
 };
 const resetPassword = async (req, res) => {
   try {
-    
+    const {password, confirmPassword} = req.body;
+    const {token} = req.params;
+
+    // 1️⃣ Validate input
+    if(!password || !confirmPassword || !token){
+      return res.status(400).json({
+        success: false,
+        message: "Password, confirm password and token are required",
+      });
+    }
+
+    // 2️⃣ Validate password strength
+    const passwordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
+      });
+    }
+
+    // 3️⃣ Check if passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Password and confirmPassword do not match.",
+      });
+    }
+
+    // 4️⃣ Verify token
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.RESET_PASSWORD_SECRET);
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired token.",
+      });
+    }
+
+    // 5️⃣ Find user by ID from token payload
+    const user = await UserToken.findById(payload.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    user.password = password;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. You can now log in with your new password.",
+    });
   } catch (error) {
     console.error("Reset password error:", error);
     return res.status(500).json({

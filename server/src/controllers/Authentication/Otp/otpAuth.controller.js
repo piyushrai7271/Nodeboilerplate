@@ -1,5 +1,6 @@
 import UserOtp from "../../../models/Authentication/Otp/otpAuth.model.js";
 import otpVerifyEmail from "../../../utilles/Otp/otp.verifyEmail.js";
+import otpVerifySms from "../../../utilles/Otp/otp.verifySms.js";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -653,8 +654,6 @@ export {
   login,
   verifyOtp,
   resendOtp,
-  forgetPassword,
-  resetPassword,
   addUserProfileDetail,
   updateUserProfileDetail,
   getUserProfileDetail,
