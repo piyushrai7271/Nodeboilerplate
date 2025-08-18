@@ -1,7 +1,7 @@
 import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
 import { cloudinary } from "../../../config/cloudinary.js";
 import sendOtpVerifyEmail from "../../../utilles/Token/token.verifyEmail.js";
-
+import resetPasswordLink from "../../../utilles/Token/token.resetPassword.js";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -374,99 +374,103 @@ const changePassword = async (req, res) => {
     });
   }
 };
-const forgetPassword = async (req, res) => {
+const forgetPassword = async (req, res) =>{
   try {
-    const { email } = req.body;
+    const {email} = req.body;
 
+    // 1️⃣ Validate email presence
+    if(!email){
+       return res.status(400).json({
+         success:false,
+         message:"Please provide valide registered email !!"
+       })
+    }
+
+   // 2️⃣ Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({
+      return res.status(422).json({
         success: false,
         message: "Invalid email format",
       });
     }
 
-    // 1️⃣ Validate email presence
-    if(!email){
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    // 2️⃣ Find user by email
-    const user = await UserToken.find({ email, isDeleted: false });
-    if(!user || user.length === 0){
+    // 3️⃣ Find user by email
+    const user = await UserToken.findOne({ email, isDeleted: false });
+    if(!user){
       return res.status(404).json({
-        success: false,
-        message: "User not found with this email",
-      });
+        success:false,
+        message:"User not found with this email !!"
+      })
     }
-
-    // 3️⃣ Check if user is verified
-    if (!user[0].isVerified){
+    // 4️⃣ Check if user is verified
+    if(!user.isVerified){
       return res.status(403).json({
-        success: false,
-        message: "Please verify your email before resetting password",
-      });
+        success:false,
+        message:"Please verify your email before resetting password !!"
+      })
     }
+    // 5️⃣ Send reset link on email
+    const result = await resetPasswordLink(user);
 
-    const result = await resetPasswordOtpEmail(user[0]);
-
-    if(result.success){
-      return res.status(200).json({
-        success: true,
-        message: "Reset password OTP sent to your email",
-      });
-    } else {
+    // 6️⃣ Check if email sending was successful
+    if(!result.success){
       return res.status(500).json({
-        success: false,
-        message: "Failed to send reset password OTP. Please try again later",
-      });
+        success:false,
+        message:"Failed to send reset password link. Please try again later !!"
+      })
     }
-
+    // 7️⃣ Respond with success message
+    return res.status(200).json({
+      success:false,
+      message:"Reset password link sent to your email. Please check your inbox !!"
+    })
   } catch (error) {
-    console.error("Forget password error:", error);
+    console.error("Error in forgetPassword",error);
     return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
+      success:false,
+      message:"Internal server error !!",
+      error:error.message
+    })
   }
-};
+}
 const resetPassword = async (req, res) => {
   try {
-    const {password, confirmPassword} = req.body;
+    const {newPassword, confirmPassword} = req.body;
     const {token} = req.params;
 
-    // 1️⃣ Validate input
-    if(!password || !confirmPassword || !token){
+    // 1️⃣ Validate new password presence
+    if(!newPassword || !confirmPassword){
       return res.status(400).json({
-        success: false,
-        message: "Password, confirm password and token are required",
-      });
+        success:false,
+        message:"New password and confirm password are required !!"
+      })
     }
-
-    // 2️⃣ Validate password strength
+    // 2️⃣ Validate comming token
+    if(!token){
+      return res.status(400).json({
+        success:false,
+        message:"Token is missing !!"
+      })
+    }
+    //3️⃣ Validate password format
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(password)) {
+    if (!passwordRegex.test(newPassword)) {
       return res.status(400).json({
         success: false,
         message:
           "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
-
-    // 3️⃣ Check if passwords match
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Password and confirmPassword do not match.",
-      });
+    // 4️⃣ Comparing newPassword and confirmPassword
+    if(newPassword !== confirmPassword){
+      return res.status({
+        success:false,
+        message:"newPassword and confirmPassword is not matching"
+      })
     }
-
-    // 4️⃣ Verify token
+    // 5️⃣ Verify token
     let payload;
     try {
       payload = jwt.verify(token, process.env.RESET_PASSWORD_SECRET);
@@ -476,32 +480,32 @@ const resetPassword = async (req, res) => {
         message: "Invalid or expired token.",
       });
     }
-
-    // 5️⃣ Find user by ID from token payload
+    // 6️⃣ Find user by token payload
     const user = await UserToken.findById(payload.id);
-    if (!user) {
-      return res.status(404).json({
+    if(!user){
+      return res.status(400).json({
         success: false,
-        message: "User not found.",
-      });
+        message:"User not found."
+      })
     }
-
+    // 7️⃣ Update and hash new Password
     user.password = password;
     await user.save();
 
+    // 7️⃣ Return Success response
     return res.status(200).json({
-      success: true,
-      message: "Password reset successfully. You can now log in with your new password.",
-    });
+      success:true,
+      message:"Password change successfully, now you can login"
+    })
   } catch (error) {
-    console.error("Reset password error:", error);
+    console.error("Error in resetPassword", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
     });
   }
-};
+}
 const addProfileDetails = async (req, res) => {
   try {
     // 1️⃣ Extract request body fields & uploaded file
