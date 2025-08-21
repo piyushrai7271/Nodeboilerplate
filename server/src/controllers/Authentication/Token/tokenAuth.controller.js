@@ -2,6 +2,7 @@ import UserToken from "../../../models/Authentication/Token/tokeAuth.model.js";
 import { cloudinary } from "../../../config/cloudinary.js";
 import sendOtpVerifyEmail from "../../../utilles/Token/token.verifyEmail.js";
 import resetPasswordLink from "../../../utilles/Token/token.resetPassword.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -97,7 +98,7 @@ const register = async (req, res) => {
     // 9️⃣ Success response
     return res.status(201).json({
       success: true,
-      message: "User registered successfully. OTP sent to email.",
+      message: "User registered successfully !! and OTP sent to email.",
       user: {
         id: user._id,
         fullName: user.fullName,
@@ -422,8 +423,8 @@ const forgetPassword = async (req, res) =>{
     }
     // 7️⃣ Respond with success message
     return res.status(200).json({
-      success:false,
-      message:"Reset password link sent to your email. Please check your inbox !!"
+      success:true,
+      message:"Reset password link sent to your email. Please check your email box !!"
     })
   } catch (error) {
     console.error("Error in forgetPassword",error);
@@ -489,7 +490,7 @@ const resetPassword = async (req, res) => {
       })
     }
     // 7️⃣ Update and hash new Password
-    user.password = password;
+    user.password = newPassword;
     await user.save();
 
     // 7️⃣ Return Success response

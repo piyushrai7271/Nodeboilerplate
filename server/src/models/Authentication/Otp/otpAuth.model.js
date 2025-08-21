@@ -90,7 +90,7 @@ otpAuthSchema.methods.isOtpCorrect = async function (inputOtp) {
   if (!this.otpExpiresAt || Date.now() > this.otpExpiresAt.getTime()) {
     return false; // Expired
   }
-  return bcrypt.compare(inputOtp, this.otp);
+  return await bcrypt.compare(inputOtp, this.otp);
 };
 
 // 🔑 Generate Access Token
