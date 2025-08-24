@@ -3,18 +3,27 @@ import twilio from "twilio";
 const otpVerifySms = async (user) => {
   try {
     if (!user.mobileNumber) {
-      return { success: false, message: "User does not have a valid mobile number." };
+      return {
+        success: false,
+        message: "User does not have a valid mobile number.",
+      };
     }
 
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     // ✅ Only update user object, don't save here
     user.otp = otp;
     user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
 
-    const messageBody = `Your login OTP for ${process.env.APP_NAME || "NODEBOILERPLATE"} is ${otp}. It is valid for 10 minutes.`;
+    const messageBody = `Your login OTP for ${
+      process.env.APP_NAME || "NODEBOILERPLATE"
+    } is ${otp}. It is valid for 10 minutes.`;
 
     await client.messages.create({
       body: messageBody,
@@ -33,11 +42,6 @@ const otpVerifySms = async (user) => {
 };
 
 export default otpVerifySms;
-
-
-
-
-
 
 // import twilio from "twilio";
 

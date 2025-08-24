@@ -1,6 +1,7 @@
 import UserOtp from "../../../models/Authentication/Otp/otpAuth.model.js";
 import otpVerifyEmail from "../../../utilles/Otp/otp.verifyEmail.js";
 import otpVerifySms from "../../../utilles/Otp/otp.verifySms.js";
+import {cloudinary} from "../../../config/cloudinary.js";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -129,7 +130,7 @@ const verifyOtp = async (req, res) => {
     const user = await UserOtp.findOne({
       _id: userId,
       isDeleted: false,
-    }).select("+otp");
+    }).select("+otp +otpExpiresAt");
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -438,7 +439,15 @@ const getUserProfileDetail = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "User profile details fetched successfully.",
-      data: user,
+      data:{
+         id:user._id,
+         fullName:user.fullName,
+         email:user.email,
+         mobileNumber:user.mobileNumber,
+         gender:user.gender,
+         address:user.address,
+         profileImage:user.profileImage
+      },
     });
   } catch (error) {
     console.error("Error fetching profile detail:", error);
@@ -480,7 +489,7 @@ const getAllUserDetails = async (req, res) => {
     // 3️⃣ Count total documents for pagination
     const totalUsers = await UserOtp.countDocuments(searchQuery);
 
-    // 4️⃣ Fetch paginated users (exclude sensitive fields)
+    // 4️⃣ Fetch paginated users (include createdAt & updatedAt)
     const users = await UserOtp.find(searchQuery)
       .select("fullName email mobileNumber gender address profileImage createdAt updatedAt")
       .sort({ createdAt: -1 }) // Latest first
@@ -488,7 +497,20 @@ const getAllUserDetails = async (req, res) => {
       .limit(limit)
       .lean();
 
-    // 5️⃣ Return response
+    // 5️⃣ Transform data: change _id → id
+    const formattedUsers = users.map((user) => ({
+      id: user._id.toString(),
+      fullName: user.fullName,
+      email: user.email,
+      mobileNumber: user.mobileNumber,
+      gender: user.gender,
+      address: user.address,
+      profileImage: user.profileImage,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+
+    // 6️⃣ Return response
     return res.status(200).json({
       success: true,
       message: "Users fetched successfully.",
@@ -498,7 +520,7 @@ const getAllUserDetails = async (req, res) => {
         currentPage: page,
         limit,
       },
-      data: users,
+      data: formattedUsers,
     });
   } catch (error) {
     console.error("Error fetching all user details:", error);

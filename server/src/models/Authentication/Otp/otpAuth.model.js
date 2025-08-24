@@ -88,6 +88,7 @@ otpAuthSchema.pre("save", async function (next) {
 // 🔐 Compare OTP with expiry check
 otpAuthSchema.methods.isOtpCorrect = async function (inputOtp) {
   if (!this.otpExpiresAt || Date.now() > this.otpExpiresAt.getTime()) {
+    console.log(`Expire of otp : ${this.otpExpiresAt}`)
     return false; // Expired
   }
   return await bcrypt.compare(inputOtp, this.otp);
@@ -109,14 +110,14 @@ otpAuthSchema.methods.generateAccessToken = function () {
 // 🔄 Generate Refresh Token
 otpAuthSchema.methods.generateRefreshToken = function () {
   return jwt.sign({ _id: this._id }, process.env.REFRESH_TOKEN_SECRET, {
-    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    expiresIn:process.env.REFRESH_TOKEN_EXPIRY,
   });
 };
 
 // 🔑 Generate OTP Token
 otpAuthSchema.methods.generateOtpToken = function () {
   return jwt.sign({ _id: this._id }, process.env.OTP_TOKEN_SECRET, {
-    expiresIn: process.env.OTP_TOKEN_EXPIRY,
+    expiresIn:process.env.OTP_TOKEN_EXPIRY || "10m",
   });
 };
 
